@@ -33,7 +33,7 @@ export const Route = createFileRoute("/checkout")({
 
 function Checkout() {
   const { product: slug } = Route.useSearch();
-  const product = findProduct(slug) ?? products[0];
+  const product = findProduct(slug) ?? products[0]!;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
