@@ -8,9 +8,10 @@ import { buildRazorpayUrl } from "@/lib/payment";
 type CheckoutSearch = { product?: string };
 
 export const Route = createFileRoute("/checkout")({
-  validateSearch: (search: Record<string, unknown>): CheckoutSearch => ({
-    product: typeof search.product === "string" ? search.product : undefined,
-  }),
+  validateSearch: (search: Record<string, unknown>): CheckoutSearch =>
+    typeof search["product"] === "string"
+      ? { product: search["product"] }
+      : {},
   head: () => ({
     meta: [
       { title: "Checkout — Chefs Delights" },
