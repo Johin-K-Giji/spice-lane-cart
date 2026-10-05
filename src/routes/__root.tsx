@@ -108,7 +108,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+      // BASE_URL keeps this correct under a subpath (GitHub Pages) as well as
+      // at the root; it always carries a trailing slash.
+      {
+        rel: "icon",
+        href: `${import.meta.env.BASE_URL}favicon.ico`,
+        type: "image/x-icon",
+      },
     ],
   }),
   shellComponent: RootShell,

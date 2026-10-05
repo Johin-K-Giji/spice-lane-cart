@@ -1,0 +1,61 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than publishing out of order.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install --frozen-lockfile
+
+      # A project site is served from /<repo>/, so the build needs that prefix
+      # baked into asset URLs and router paths. Derived from the repo name so a
+      # rename doesn't silently break every asset URL.
+      - name: Build static site
+        run: PAGES_BASE="/${GITHUB_REPOSITORY#*/}/" bun run build
+
+      - name: Add Pages fallbacks
+        run: |
+          # The prerendered SPA shell doubles as the 404 page, so client-side
+          # routes survive a deep link or a refresh.
+          cp .output/public/_shell.html .output/public/404.html
+          # Without this, Pages runs the output through Jekyll, which strips
+          # files and directories beginning with an underscore.
+          touch .output/public/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # Only the client output is static; .output/server is the unused
+          # SSR worker bundle.
+          path: .output/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
