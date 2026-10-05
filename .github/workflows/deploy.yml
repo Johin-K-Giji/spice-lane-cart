@@ -42,7 +42,11 @@ jobs:
           # files and directories beginning with an underscore.
           touch .output/public/.nojekyll
 
+      # `enablement` turns Pages on via the API when the repo has never had it
+      # configured, which otherwise fails this step with "Get Pages site failed".
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
