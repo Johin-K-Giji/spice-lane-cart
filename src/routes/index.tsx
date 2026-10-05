@@ -154,7 +154,8 @@ function Index() {
               </p>
             </div>
             <Link
-              to="/shop"
+              to="/"
+              hash="products"
               className="rounded-full bg-terracotta text-cream text-sm font-semibold px-4 py-2 hover:bg-terracotta-deep transition-colors"
             >
               View all products
