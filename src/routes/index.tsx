@@ -215,3 +215,65 @@ function Index() {
     </div>
   );
 }
+
+function ProductSection() {
+  const [active, setActive] = useState<string>("All");
+  const shown = active === "All" ? products : products.filter((p) => p.category === active);
+
+  return (
+    <section id="products" className="bg-paper scroll-mt-20">
+      <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16 lg:py-20">
+        <div className="anim-rise">
+          <span className="text-xs font-semibold uppercase tracking-[0.2em] text-terracotta">
+            The full range
+          </span>
+          <h2 className="mt-3 font-display font-semibold text-4xl sm:text-5xl text-balance leading-none">
+            Every jar, pack and powder
+          </h2>
+          <p className="mt-3 text-ink/60 text-pretty max-w-[48ch]">
+            All {products.length} products from the catalogue — puttu powders,
+            millet noodles and pasta, flakes, idli mixes, muesli, whole millets
+            and spice powders, ₹75–₹150.
+          </p>
+        </div>
+
+        {/* Category filter */}
+        <div className="mt-8 flex flex-wrap gap-2 anim-rise-1">
+          {["All", ...categories].map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => setActive(c)}
+              aria-pressed={active === c}
+              className={
+                "rounded-full text-sm font-semibold px-4 py-2 transition-colors " +
+                (active === c
+                  ? "bg-ink text-cream"
+                  : "bg-cream text-ink/70 ring-1 ring-ink/15 hover:text-ink hover:ring-ink/40")
+              }
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+
+        <div key={active} className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          {shown.map((p, i) => (
+            <div
+              key={p.slug}
+              className={
+                "anim-rise " + (i % 4 === 1 ? "anim-rise-1" : i % 4 === 2 ? "anim-rise-2" : i % 4 === 3 ? "anim-rise-3" : "")
+              }
+            >
+              <ProductCard product={p} />
+            </div>
+          ))}
+        </div>
+
+        <p className="mt-10 text-center text-sm text-ink/50 anim-rise">
+          Free delivery within Perumbavoor · Ships across Kerala
+        </p>
+      </div>
+    </section>
+  );
+}
