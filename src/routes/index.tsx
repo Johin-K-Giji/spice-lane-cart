@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { ProductCard } from "@/components/site/ProductCard";
-import { categories, featured } from "@/data/products";
+import { categories, featured, products } from "@/data/products";
 import heroJar from "@/assets/hero-jar.jpg";
 import storyJar from "@/assets/story-jar.jpg";
 
