@@ -27,11 +27,12 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      # A project site is served from /<repo>/, so the build needs that prefix
-      # baked into asset URLs and router paths. Derived from the repo name so a
-      # rename doesn't silently break every asset URL.
+      # Served from a custom domain, so the site sits at the domain root and
+      # PAGES_BASE stays unset (vite.config.ts defaults it to "/"). If this ever
+      # moves back to johin-k-giji.github.io/<repo>/, set
+      # PAGES_BASE="/${GITHUB_REPOSITORY#*/}/" here or every asset URL 404s.
       - name: Build static site
-        run: PAGES_BASE="/${GITHUB_REPOSITORY#*/}/" bun run build
+        run: bun run build
 
       - name: Add Pages fallbacks
         run: |
@@ -41,6 +42,10 @@ jobs:
           # Without this, Pages runs the output through Jekyll, which strips
           # files and directories beginning with an underscore.
           touch .output/public/.nojekyll
+          # The custom domain lives in the repo's CNAME file, which GitHub
+          # maintains. An Actions deploy publishes only the artifact, so carry
+          # it across or the domain can be dropped on redeploy.
+          if [ -f CNAME ]; then cp CNAME .output/public/CNAME; fi
 
       # `enablement` turns Pages on via the API when the repo has never had it
       # configured, which otherwise fails this step with "Get Pages site failed".
