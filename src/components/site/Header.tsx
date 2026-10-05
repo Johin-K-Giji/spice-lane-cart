@@ -33,6 +33,13 @@ export function Header() {
             </span>
           </Link>
           <nav className="hidden md:flex items-center gap-8 text-sm font-medium">
+            <Link
+              to="/"
+              hash="products"
+              className="hover:text-terracotta transition-colors"
+            >
+              Products
+            </Link>
             <Link to="/shop" className="hover:text-terracotta transition-colors">
               Shop
             </Link>
