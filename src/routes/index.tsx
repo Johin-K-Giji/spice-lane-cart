@@ -169,6 +169,9 @@ function Index() {
         </div>
       </section>
 
+      {/* All products */}
+      <ProductSection />
+
       {/* Brand story */}
       <section id="story" className="bg-leaf text-cream scroll-mt-20">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 py-16 lg:py-20 grid lg:grid-cols-2 gap-10 items-center">
