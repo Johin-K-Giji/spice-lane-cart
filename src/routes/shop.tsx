@@ -8,8 +8,8 @@ type ShopSearch = { category?: Category };
 
 export const Route = createFileRoute("/shop")({
   validateSearch: (search: Record<string, unknown>): ShopSearch => {
-    const category = search.category as Category | undefined;
-    return categories.includes(category as Category) ? { category } : {};
+    const category = search["category"] as Category | undefined;
+    return category && categories.includes(category) ? { category } : {};
   },
   head: () => ({
     meta: [
