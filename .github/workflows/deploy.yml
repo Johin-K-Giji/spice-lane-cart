@@ -33,6 +33,10 @@ jobs:
       # PAGES_BASE="/${GITHUB_REPOSITORY#*/}/" here or every asset URL 404s.
       - name: Build static site
         run: bun run build
+        env:
+          # Where the backend (/backend) is deployed, e.g. https://api.chefsdelightsfoods.com.
+          # Set it under Settings → Secrets and variables → Actions → Variables.
+          VITE_API_URL: ${{ vars.API_URL }}
 
       - name: Add Pages fallbacks
         run: |

@@ -1,24 +1,24 @@
 /**
- * Razorpay Checkout, opened directly in the browser.
+ * Razorpay Checkout, backed by the API in /backend.
  *
- * The site is served from GitHub Pages, so there is no server to create an
- * order or verify a payment signature. Checkout is therefore opened without an
- * `order_id`, and the buyer's details travel with the payment as `prefill`
- * (to save them typing) and `notes` (so they're recorded against the payment).
+ * 1. The backend creates the order, pricing it from its own product table, and
+ *    a matching Razorpay order. It returns the key and `order_id` for Checkout.
+ * 2. Checkout opens with that `order_id`.
+ * 3. Razorpay's success callback is sent back to the backend, which checks the
+ *    payment signature with the key secret. Only then is the order "paid".
  *
- * Consequence worth knowing: payments are real and arrive in the Razorpay
- * account, but `onSuccess` is only Razorpay's word that it worked — nothing
- * here can verify the signature. Fulfil orders against the Razorpay dashboard,
- * where the notes below appear, rather than trusting the browser.
+ * The key secret lives only in backend/.env. Nothing secret is shipped here.
  */
 
-/** Publishable key. Safe to ship — it is visible in the browser by design. */
-export const RAZORPAY_KEY_ID = "rzp_live_LIrBEQw6TTri1V";
+/**
+ * Base URL of the backend. Set VITE_API_URL at build time (e.g. in the deploy
+ * workflow); local dev falls back to the backend's default port.
+ */
+const API_URL = (
+  import.meta.env["VITE_API_URL"] ?? (import.meta.env.DEV ? "http://localhost:4000" : "")
+).replace(/\/$/, "");
 
 const CHECKOUT_SRC = "https://checkout.razorpay.com/v1/checkout.js";
-
-/** Razorpay truncates note values past 256 characters. */
-const NOTE_MAX = 256;
 
 export type BuyerDetails = {
   name: string;
@@ -28,13 +28,31 @@ export type BuyerDetails = {
 };
 
 export type OrderDetails = {
+  productSlug: string;
   productName: string;
   productWeight: string;
-  /** Rupees, as displayed in the UI. Converted to paise below. */
-  amount: number;
+  quantity?: number;
 };
 
-export type PaymentSuccess = { razorpay_payment_id: string };
+export type PaymentSuccess = { orderId: string; paymentId: string };
+
+type RazorpayResponse = {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+};
+
+/** What POST /api/orders returns. */
+type CreatedOrder = {
+  order: { id: string; amount: number };
+  checkout: {
+    key: string;
+    order_id: string;
+    amount: number;
+    currency: string;
+    prefill: { name: string; email: string; contact: string };
+  };
+};
 
 type RazorpayInstance = {
   open: () => void;
@@ -72,7 +90,28 @@ function loadCheckoutScript(): Promise<void> {
   return scriptPromise;
 }
 
-const clip = (value: string) => value.trim().slice(0, NOTE_MAX);
+/** POSTs JSON to the backend, turning its `{ error, details }` bodies into readable errors. */
+async function post<T>(path: string, body: unknown): Promise<T> {
+  if (!API_URL) throw new Error("Checkout isn't configured yet. Please try again later.");
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new Error("Couldn't reach our server. Check your connection and try again.");
+  }
+
+  const data = (await response.json().catch(() => null)) as
+    (T & { error?: string; details?: { message: string }[] }) | null;
+  if (!response.ok) {
+    throw new Error(data?.details?.[0]?.message ?? data?.error ?? "Something went wrong.");
+  }
+  return data as T;
+}
 
 /** Mirrors the required fields on the checkout form. */
 export function validateBuyer(buyer: BuyerDetails): string | null {
@@ -91,6 +130,14 @@ type OpenCheckoutArgs = {
   buyer: BuyerDetails;
   order: OrderDetails;
   onSuccess: (payment: PaymentSuccess) => void;
+  /** Razorpay has taken the payment and the backend is checking its signature. */
+  onVerifying?: () => void;
+  /**
+   * Razorpay reported success but the backend couldn't confirm it (network
+   * error, signature mismatch). Money may have moved, so don't offer a retry.
+   * The Razorpay webhook will still mark the order paid if it went through.
+   */
+  onUnconfirmed?: (payment: PaymentSuccess) => void;
   onDismiss?: () => void;
   onError?: (message: string) => void;
 };
@@ -99,13 +146,27 @@ export async function openRazorpayCheckout({
   buyer,
   order,
   onSuccess,
+  onVerifying,
+  onUnconfirmed,
   onDismiss,
   onError,
 }: OpenCheckoutArgs): Promise<void> {
+  let created: CreatedOrder;
   try {
-    await loadCheckoutScript();
+    [created] = await Promise.all([
+      post<CreatedOrder>("/api/orders", {
+        customer: {
+          name: buyer.name.trim(),
+          email: buyer.email.trim(),
+          phone: buyer.phone.trim(),
+          address: buyer.address.trim(),
+        },
+        items: [{ slug: order.productSlug, quantity: order.quantity ?? 1 }],
+      }),
+      loadCheckoutScript(),
+    ]);
   } catch (error) {
-    onError?.(error instanceof Error ? error.message : "Couldn't load Razorpay.");
+    onError?.(error instanceof Error ? error.message : "Couldn't start checkout.");
     return;
   }
 
@@ -114,29 +175,23 @@ export async function openRazorpayCheckout({
     return;
   }
 
+  const orderId = created.order.id;
+
   const checkout = new window.Razorpay({
-    key: RAZORPAY_KEY_ID,
-    // Razorpay bills in paise, and rejects non-integer amounts.
-    amount: Math.round(order.amount * 100),
-    currency: "INR",
+    ...created.checkout,
     name: "Chefs Delights",
     description: `${order.productName} (${order.productWeight})`,
-    prefill: {
-      name: buyer.name.trim(),
-      email: buyer.email.trim(),
-      contact: buyer.phone.trim(),
-    },
-    notes: {
-      product_name: clip(order.productName),
-      product_weight: clip(order.productWeight),
-      customer_name: clip(buyer.name),
-      customer_email: clip(buyer.email),
-      customer_phone: clip(buyer.phone),
-      delivery_address: clip(buyer.address),
-    },
     theme: { color: "#E8A33D" },
     modal: { ondismiss: () => onDismiss?.() },
-    handler: (payment: PaymentSuccess) => onSuccess(payment),
+    handler: async (response: RazorpayResponse) => {
+      onVerifying?.();
+      try {
+        await post(`/api/orders/${orderId}/verify`, response);
+        onSuccess({ orderId, paymentId: response.razorpay_payment_id });
+      } catch {
+        onUnconfirmed?.({ orderId, paymentId: response.razorpay_payment_id });
+      }
+    },
   });
 
   checkout.on("payment.failed", (payload: unknown) => {
