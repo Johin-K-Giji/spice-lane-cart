@@ -3,7 +3,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
 import { findProduct, products } from "@/data/products";
-import { openRazorpayCheckout, validateBuyer } from "@/lib/payment";
+import { openRazorpayCheckout, validateBuyer, type PaymentSuccess } from "@/lib/payment";
 
 type CheckoutSearch = { product?: string };
 
@@ -38,9 +38,11 @@ function Checkout() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
 
-  const [status, setStatus] = useState<"idle" | "opening" | "paid">("idle");
+  const [status, setStatus] = useState<"idle" | "opening" | "verifying" | "paid" | "unconfirmed">(
+    "idle",
+  );
   const [error, setError] = useState<string | null>(null);
-  const [paymentId, setPaymentId] = useState<string | null>(null);
+  const [payment, setPayment] = useState<PaymentSuccess | null>(null);
 
   const handlePay = async () => {
     const buyer = { name, email, phone, address };
@@ -57,13 +59,18 @@ function Checkout() {
     await openRazorpayCheckout({
       buyer,
       order: {
+        productSlug: product.slug,
         productName: product.name,
         productWeight: product.weight,
-        amount: product.price,
       },
-      onSuccess: (payment) => {
-        setPaymentId(payment.razorpay_payment_id);
+      onVerifying: () => setStatus("verifying"),
+      onSuccess: (confirmed) => {
+        setPayment(confirmed);
         setStatus("paid");
+      },
+      onUnconfirmed: (unconfirmed) => {
+        setPayment(unconfirmed);
+        setStatus("unconfirmed");
       },
       // Closing the modal is not a failure — just let them try again.
       onDismiss: () => setStatus("idle"),
@@ -201,21 +208,39 @@ function Checkout() {
                   className="mt-6 rounded-2xl bg-saffron/15 ring-1 ring-saffron/40 p-4 text-center"
                 >
                   <p className="font-display font-semibold text-lg text-cream">Payment received</p>
-                  <p className="mt-1 text-xs text-cream/60">Reference {paymentId}</p>
+                  <p className="mt-1 text-xs text-cream/60">Order {payment?.orderId}</p>
+                  <p className="text-xs text-cream/60">Payment {payment?.paymentId}</p>
                   <p className="mt-3 text-xs text-cream/60">
                     We&rsquo;ll be in touch on {email} to confirm delivery.
                   </p>
+                </div>
+              ) : status === "unconfirmed" ? (
+                <div
+                  role="alert"
+                  className="mt-6 rounded-2xl bg-saffron/15 ring-1 ring-saffron/40 p-4 text-center"
+                >
+                  <p className="font-display font-semibold text-lg text-cream">
+                    We couldn&rsquo;t confirm your payment yet
+                  </p>
+                  <p className="mt-2 text-xs text-cream/60">
+                    Please don&rsquo;t pay again. If money left your account, your order is safe
+                    &mdash; contact us and quote these references.
+                  </p>
+                  <p className="mt-3 text-xs text-cream/60">Order {payment?.orderId}</p>
+                  <p className="text-xs text-cream/60">Payment {payment?.paymentId}</p>
                 </div>
               ) : (
                 <>
                   <button
                     type="button"
                     onClick={handlePay}
-                    disabled={status === "opening"}
+                    disabled={status === "opening" || status === "verifying"}
                     className="mt-6 w-full inline-flex items-center justify-center gap-2 rounded-full bg-saffron text-ink text-base font-semibold py-3.5 ring-1 ring-saffron hover:bg-cream transition-colors disabled:opacity-60 disabled:hover:bg-saffron"
                   >
                     {status === "opening" ? (
                       "Opening Razorpay…"
+                    ) : status === "verifying" ? (
+                      "Confirming payment…"
                     ) : (
                       <>
                         Pay &#8377;{product.price}
